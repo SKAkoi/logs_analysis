@@ -1,87 +1,86 @@
 #!/usr/bin/env python3
 # a reporting tool that prints out reports based on the data in the News DB
 
+import sys
 import psycopg2
 
-DBNAME = "news"
+
+def connect(db_name = "news"):
+    """
+    Connects to the PostgreSQL database and returns the cursor and db variables
+    """
+    try:
+        db = psycopg2.connect(database="news")
+        c = db.cursor()
+        return db, c
+    except psycopg2.Error as e:
+        """
+        If connecting to the database fails, print a message and exit Program
+        """
+        print("Unable to make database connection. Program exiting")
+        sys.exit(1)
 
 
-# what are the three most popular articles of all time?
-# Ex: 'some popular article title - 1000 views'
+def fetch_query(query):
+    """
+    Connects to the database, query, fetch results, close connection, return
+    results
+    """
+    db, c = connect()
+    c.execute(query)
+    results = c.fetchall()
+    db.close()
+    return results
+
 def most_popular_articles():
     """
-    Find the most popular articles of all time and their number of views
-    by running a query that joins the articles and log tables
+    Fetch the most popular articles using the fetch_query helper function and
+    print the results
     """
-    conn = psycopg2.connect(database=DBNAME)
-    c = conn.cursor()
-    c.execute("select title, count(status) as num " +
+    print("What are the most popular articles of all time?")
+    results = fetch_query("select title, count(status) as num " +
               "from articles, log " +
               "where concat('/article/', slug) = path and status = '200 OK' " +
               "group by articles.title " +
               "order by num desc limit 3;")
-    popular_articles = c.fetchall()
-    # print each row of results returned in a more readable format
-    for row in popular_articles:
+    for row in results:
         print(row[0], " - ", row[1], "views")
     print("\n")
-    conn.close()
 
-
-# who are the most popular article authors of all time?
-# Ex: Ursula La Multa - 2304 views'
 def most_popular_authors():
     """
-    Find the most popular authors of all time and their number of views
-    by running a query that joins the articles, authors and log tables
+    Fetch the most popular authors using the fetch_query helper function and
+    print the results
     """
-    conn = psycopg2.connect(database=DBNAME)
-    c = conn.cursor()
-    c.execute("select authors.name, count(status) as num " +
+    print("What are the most popular authors of all time?")
+    results = fetch_query("select authors.name, count(status) as num " +
               "from articles, authors, log " +
               "where concat('/article/', slug) = path " +
               "and status = '200 OK' " +
               "and articles.author = authors.id " +
               "group by authors.name " +
               "order by num desc;")
-    popular_authors = c.fetchall()
-    # print each row of results returned in a more readable format
-    for row in popular_authors:
+    for row in results:
         print(row[0], " - ", row[1], "views")
     print("\n")
-    conn.close()
 
-
-# on which day did more than 1% of requests lead to errors?
-# Ex: July 29, 2016 - 3.5% errors
-# HTTP ERROR STATUS CODES - 404 NOT FOUND
-def day_with_erroneous_requests():
+def most_error_days():
     """
-    Determine the day on which more than 1 percent of requests were bad
-    using two views created in the database (bad_requests and total_requests)
-    For the given day, also return the percentage of bad requests.
+    Fetch the days with more than 1% of bad requests and print the
+    results
     """
-    conn = psycopg2.connect(database=DBNAME)
-    c = conn.cursor()
-    c.execute("select to_char(total_requests.day, " +
+    print("On which day did more than 1% of requests lead to errors?")
+    results = fetch_query("select to_char(total_requests.day, " +
               "'FMMonth FMDD, YYYY') as day, " +
               "round(bad_requests.requests * 100.0 / " +
               "total_requests.requests, 2) as percent " +
               "from bad_requests, total_requests " +
               "where total_requests.day = bad_requests.day and " +
               "bad_requests.requests * 100 / total_requests.requests > 1.0;")
-    bad_days = c.fetchall()
-    # print each row of results returned in a more readable format
-    for row in bad_days:
+    for row in results:
         print(row[0], " - ", str(row[1]) + "%")
-    conn.close()
 
-
-print("what are the three most popular articles of all time?")
-most_popular_articles()
-
-print("who are the most popular article authors of all time?")
-most_popular_authors()
-
-print("On which day did more than 1% of requests lead to errors?")
-day_with_erroneous_requests()
+if __name__ == '__main__':
+    most_popular_articles()
+    most_popular_authors()
+    most_error_days()
